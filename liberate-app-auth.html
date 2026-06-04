@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Liberate Funcional</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&display=swap" rel="stylesheet"/>
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --verde: #148A3E; --verde-dim: #0F6B30;
+      --verde-light: rgba(20,138,62,0.12); --verde-pale: #E8F5EE;
+      --negro: #0D0D0D; --blanco: #FFFFFF;
+      --gris: #F2F2F2; --gris-mid: #E0E0E0; --gris-text: #777;
+      --oro: #D4870A; --oro-light: rgba(212,135,10,0.1);
+      --error: #C33; --error-light: rgba(200,50,50,0.08);
+    }
+    html, body { height: 100%; background: #EFEFEF; font-family: 'DM Sans', sans-serif; color: var(--negro); }
+
+    /* ── PHONE SHELL ── */
+    .phone-shell {
+      max-width: 390px; margin: 2rem auto;
+      background: var(--blanco); border-radius: 40px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.08);
+      overflow: hidden; position: relative;
+      height: 844px; display: flex; flex-direction: column;
+    }
+    .status-bar {
+      height: 44px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1.5rem;
+    }
+    .status-bar .time { font-size: 0.85rem; font-weight: 700; }
+    .status-icons { display: flex; gap: 0.4rem; align-items: center; }
+    .status-bar.light { background: var(--blanco); }
+    .status-bar.dark  { background: var(--negro); }
+    .status-bar.dark .time { color: var(--blanco); }
+
+    /* ── LOADING GLOBAL ── */
+    #globalLoading {
+      position: absolute; inset: 0; background: var(--negro);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 200; gap: 1rem;
+    }
+    .loading-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.5rem; letter-spacing: 0.06em; color: var(--blanco);
+    }
+    .loading-logo span { color: var(--verde); }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: var(--verde);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── SCREENS ── */
+    .screens-wrap { flex: 1; overflow: hidden; position: relative; }
+    .screen {
+      position: absolute; inset: 0;
+      overflow-y: auto; overflow-x: hidden;
+      padding-bottom: 80px; scrollbar-width: none;
+      opacity: 0; pointer-events: none;
+      transform: translateY(10px);
+      transition: opacity 0.28s ease, transform 0.28s ease;
+    }
+    .screen::-webkit-scrollbar { display: none; }
+    .screen.active { opacity: 1; pointer-events: all; transform: translateY(0); }
+    .screen.no-nav { padding-bottom: 0; }
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       AUTH SCREENS (login / registro)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .auth-screen {
+      background: var(--negro);
+      display: flex; flex-direction: column;
+      min-height: 100%;
+      position: relative; overflow: hidden;
+    }
+    .auth-screen::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(
+        -55deg, transparent, transparent 40px,
+        rgba(20,138,62,0.06) 40px, rgba(20,138,62,0.06) 41px
+      );
+    }
+    .auth-brand {
+      padding: 2rem 2rem 1.5rem;
+      position: relative; z-index: 1;
+    }
+    .auth-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.8rem; letter-spacing: 0.04em;
+      color: var(--blanco); line-height: 0.9;
+    }
+    .auth-logo span { color: var(--verde); }
+    .auth-tagline {
+      font-size: 0.72rem; font-weight: 300;
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 0.08em; margin-top: 0.4rem;
+    }
+    .auth-card {
+      background: var(--blanco);
+      border-radius: 20px 20px 0 0;
+      padding: 2rem 1.8rem;
+      flex: 1;
+      position: relative; z-index: 1;
+      margin-top: auto;
+    }
+    .auth-tabs {
+      display: flex; gap: 0; margin-bottom: 1.8rem;
+      border-bottom: 1px solid var(--gris-mid);
+    }
+    .auth-tab {
+      flex: 1; padding: 0.6rem;
+      text-align: center;
+      font-size: 0.78rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--gris-text); cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .auth-tab.active { color: var(--verde); border-color: var(--verde); }
+
+    /* form */
+    .auth-form { display: flex; flex-direction: column; gap: 0.9rem; }
+    .auth-form.hidden { display: none; }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-label {
+      font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--gris-text);
+    }
+    .form-input {
+      background: var(--gris);
+      border: 1px solid rgba(20,138,62,0.12);
+      border-radius: 4px;
+      padding: 0.75rem 1rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem; color: var(--negro);
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .form-input:focus { border-color: var(--verde); background: var(--verde-pale); }
+    .form-input.error { border-color: var(--error); background: var(--error-light); }
+    .form-error {
+      font-size: 0.65rem; color: var(--error);
+      font-weight: 500; display: none;
+    }
+    .form-error.show { display: block; }
+    .btn-auth {
+      background: var(--verde); color: var(--blanco);
+      border: none; border-radius: 4px;
+      padding: 0.95rem; margin-top: 0.3rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    }
+    .btn-auth:hover { background: var(--verde-dim); }
+    .btn-auth:active { transform: scale(0.98); }
+    .btn-auth:disabled { background: var(--gris-mid); color: var(--gris-text); cursor: not-allowed; transform: none; }
+    .auth-divider {
+      display: flex; align-items: center; gap: 0.8rem;
+      margin: 0.5rem 0; color: var(--gris-text);
+      font-size: 0.68rem; letter-spacing: 0.08em;
+    }
+    .auth-divider::before, .auth-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--gris-mid);
+    }
+    .auth-note {
+      text-align: center; font-size: 0.65rem;
+      color: var(--gris-text); line-height: 1.5;
+      margin-top: 0.5rem;
+    }
+    .auth-note a { color: var(--verde); cursor: pointer; text-decoration: none; }
+
+    /* ── TOAST NOTIFICACIÓN ── */
+    #toast {
+      position: absolute; bottom: 100px; left: 1.5rem; right: 1.5rem;
+      background: var(--negro); color: var(--blanco);
+      border-radius: 6px; padding: 0.8rem 1rem;
+      font-size: 0.78rem; font-weight: 500;
+      border-left: 3px solid var(--verde);
+      z-index: 300;
+      opacity: 0; transform: translateY(8px);
+      transition: opacity 0.3s, transform 0.3s;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.error { border-left-color: var(--error); }
+
+    /* ── PANTALLA BIENVENIDA (post-pago) ── */
+    #screen-bienvenida {
+      background: var(--negro);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 2rem;
+      min-height: 100%;
+    }
+    #screen-bienvenida::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(
+        -55deg, transparent, transparent 40px,
+        rgba(20,138,62,0.06) 40px, rgba(20,138,62,0.06) 41px
+      );
+    }
+    .bienvenida-inner { position: relative; z-index: 1; }
+    .bienvenida-emoji { font-size: 4rem; margin-bottom: 1rem; animation: bounceIn 0.6s ease; }
+    @keyframes bounceIn {
+      0% { transform: scale(0.3); opacity: 0; }
+      60% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .bienvenida-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.5rem; letter-spacing: 0.04em;
+      color: var(--blanco); line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+    .bienvenida-title span { color: var(--verde); }
+    .bienvenida-sub {
+      font-size: 0.82rem; color: rgba(255,255,255,0.55);
+      line-height: 1.6; margin-bottom: 2rem;
+      max-width: 280px;
+    }
+    .bienvenida-feats {
+      display: flex; flex-direction: column; gap: 0.6rem;
+      margin-bottom: 2rem; text-align: left;
+    }
+    .bv-feat {
+      display: flex; align-items: center; gap: 0.7rem;
+      font-size: 0.78rem; color: rgba(255,255,255,0.7);
+    }
+    .bv-feat::before { content: '✓'; color: var(--verde); font-weight: 700; font-size: 0.9rem; flex-shrink: 0; }
+    .btn-entrar {
+      width: 100%; background: var(--verde); color: var(--blanco);
+      border: none; border-radius: 4px; padding: 1rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .btn-entrar:hover { background: var(--verde-dim); }
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       APP STYLES (igual que antes)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    #screen-inicio { background: var(--blanco); }
+    .app-header { padding: 0.5rem 1.5rem 1.2rem; background: var(--blanco); border-bottom: 1px solid rgba(20,138,62,0.08); }
+    .app-header-row { display: flex; justify-content: space-between; align-items: flex-start; }
+    .greeting-label { font-size: 0.7rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gris-text); }
+    .greeting-name { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 0.04em; line-height: 1; margin-top: 0.1rem; }
+    .greeting-name .accent { color: var(--verde); }
+    .avatar { width: 42px; height: 42px; border-radius: 50%; background: var(--verde-light); border: 2px solid var(--verde); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; cursor: pointer; }
+    .streak-strip { margin: 1rem 1.5rem 0; background: var(--gris); border-radius: 4px; padding: 0.9rem 1.1rem; display: flex; align-items: center; gap: 0.8rem; border-left: 3px solid var(--verde); }
+    .streak-fire { font-size: 1.4rem; }
+    .streak-text strong { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--verde); }
+    .streak-text p { font-size: 0.72rem; color: var(--gris-text); margin-top: -0.1rem; }
+    .streak-days { margin-left: auto; display: flex; gap: 4px; }
+    .day-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--verde-light); border: 1px solid rgba(20,138,62,0.2); }
+    .day-dot.active { background: var(--verde); border-color: var(--verde); }
+    .day-dot.today { background: var(--verde); box-shadow: 0 0 0 3px rgba(20,138,62,0.2); }
+    .sec-label { padding: 1.4rem 1.5rem 0.7rem; display: flex; align-items: center; justify-content: space-between; }
+    .sec-label h2 { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 0.06em; display: flex; align-items: center; gap: 0.5rem; }
+    .sec-label h2::before { content: ''; display: block; width: 16px; height: 2px; background: var(--verde); }
+    .sec-label a { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--verde); text-decoration: none; cursor: pointer; }
+    .today-card { margin: 0 1.5rem; border-radius: 6px; overflow: hidden; background: var(--negro); position: relative; height: 190px; cursor: pointer; }
+    .today-card::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(-55deg, transparent, transparent 40px, rgba(20,138,62,0.06) 40px, rgba(20,138,62,0.06) 41px); }
+    .today-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 55%); }
+    .today-badge { position: absolute; top: 1rem; left: 1rem; z-index: 2; background: var(--verde); color: var(--blanco); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; padding: 0.25rem 0.6rem; border-radius: 2px; }
+    .today-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); z-index: 2; width: 52px; height: 52px; border: 1.5px solid rgba(255,255,255,0.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .today-play svg { margin-left: 3px; }
+    .today-info { position: absolute; bottom: 1rem; left: 1rem; right: 1rem; z-index: 2; }
+    .today-tag { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.55); margin-bottom: 0.2rem; }
+    .today-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.04em; color: var(--blanco); line-height: 1; }
+    .today-meta { display: flex; gap: 1rem; margin-top: 0.4rem; }
+    .today-meta span { font-size: 0.7rem; color: rgba(255,255,255,0.55); }
+    .rutinas-list { padding: 0 1.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
+    .rutina-row { background: var(--gris); border-radius: 4px; padding: 1rem 1.1rem; display: flex; align-items: center; gap: 1rem; cursor: pointer; border: 1px solid transparent; transition: border-color 0.2s, background 0.2s; }
+    .rutina-row:hover { border-color: rgba(20,138,62,0.25); background: var(--verde-pale); }
+    .rutina-thumb { width: 52px; height: 52px; background: var(--negro); border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; position: relative; overflow: hidden; }
+    .rutina-thumb::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(-55deg, transparent, transparent 8px, rgba(20,138,62,0.1) 8px, rgba(20,138,62,0.1) 9px); }
+    .rutina-info { flex: 1; min-width: 0; }
+    .rutina-name { font-family: 'Bebas Neue', sans-serif; font-size: 1rem; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rutina-meta { display: flex; gap: 0.7rem; margin-top: 0.2rem; }
+    .rutina-meta span { font-size: 0.68rem; color: var(--gris-text); }
+    .rutina-level { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.2rem 0.45rem; border-radius: 2px; }
+    .rutina-level.beg { background: rgba(20,138,62,0.12); color: var(--verde); }
+    .rutina-level.int { background: rgba(255,165,0,0.12); color: #D4870A; }
+    .rutina-arrow { color: var(--gris-mid); flex-shrink: 0; transition: color 0.2s; }
+    .rutina-row:hover .rutina-arrow { color: var(--verde); }
+    .progress-card { margin: 0 1.5rem; background: var(--negro); border-radius: 6px; padding: 1.3rem 1.4rem; position: relative; overflow: hidden; }
+    .progress-card::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(-55deg, transparent, transparent 40px, rgba(20,138,62,0.05) 40px, rgba(20,138,62,0.05) 41px); }
+    .progress-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; position: relative; z-index: 1; }
+    .progress-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(255,255,255,0.4); }
+    .progress-num { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 0.04em; color: var(--blanco); line-height: 1; }
+    .progress-num span { font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 300; color: rgba(255,255,255,0.45); }
+    .progress-sub { font-size: 0.7rem; color: var(--verde); font-weight: 500; }
+    .week-bars { display: flex; gap: 6px; align-items: flex-end; height: 60px; position: relative; z-index: 1; }
+    .week-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+    .bar { width: 100%; background: rgba(255,255,255,0.1); border-radius: 2px; }
+    .bar.done { background: var(--verde); }
+    .bar.today { background: var(--verde); box-shadow: 0 0 8px rgba(20,138,62,0.5); }
+    .bar.rest { background: rgba(255,255,255,0.05); }
+    .week-day { font-size: 0.6rem; font-weight: 600; letter-spacing: 0.08em; color: rgba(255,255,255,0.3); text-transform: uppercase; }
+    .week-day.today { color: var(--verde); }
+
+    /* RUTINAS SCREEN */
+    #screen-rutinas { background: var(--blanco); }
+    .page-header { padding: 0.8rem 1.5rem 0.9rem; background: var(--blanco); border-bottom: 1px solid rgba(20,138,62,0.08); }
+    .page-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 0.04em; line-height: 1; }
+    .page-title .accent { color: var(--verde); }
+    .page-sub { font-size: 0.72rem; color: var(--gris-text); margin-top: 0.1rem; }
+    .search-bar { margin: 0.9rem 1.5rem 0; background: var(--gris); border: 1px solid rgba(20,138,62,0.12); border-radius: 4px; display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem 1rem; }
+    .search-bar input { border: none; background: transparent; font-family: 'DM Sans', sans-serif; font-size: 0.82rem; color: var(--negro); outline: none; width: 100%; }
+    .search-bar input::placeholder { color: var(--gris-text); }
+    .filter-scroll { display: flex; gap: 0.5rem; padding: 0.9rem 1.5rem 0; overflow-x: auto; scrollbar-width: none; }
+    .filter-scroll::-webkit-scrollbar { display: none; }
+    .filter-chip { flex-shrink: 0; background: var(--gris); border: 1px solid rgba(20,138,62,0.12); border-radius: 2px; padding: 0.45rem 0.85rem; display: flex; align-items: center; gap: 0.35rem; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+    .filter-chip.active { background: var(--verde); border-color: var(--verde); color: var(--blanco); }
+    .filter-chip span:first-child { font-size: 0.9rem; }
+    .chip-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+    .filter-chip.active .chip-label { color: var(--blanco); }
+    .sec-row { padding: 1.2rem 1.5rem 0.6rem; display: flex; align-items: center; justify-content: space-between; }
+    .sec-row h2 { font-family: 'Bebas Neue', sans-serif; font-size: 1rem; letter-spacing: 0.07em; display: flex; align-items: center; gap: 0.45rem; }
+    .sec-row h2::before { content: ''; display: block; width: 14px; height: 2px; background: var(--verde); }
+    .rutinas-grid { padding: 0 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+    .rutina-card { background: var(--blanco); border: 1px solid rgba(20,138,62,0.1); border-radius: 6px; overflow: hidden; cursor: pointer; transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s; }
+    .rutina-card:hover { border-color: var(--verde); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(20,138,62,0.1); }
+    .video-slot { width: 100%; aspect-ratio: 16/9; background: var(--negro); position: relative; overflow: hidden; }
+    .video-slot::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(-55deg, transparent, transparent 40px, rgba(20,138,62,0.06) 40px, rgba(20,138,62,0.06) 41px); }
+    .video-slot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%); }
+    .video-badge { position: absolute; top: 0.7rem; left: 0.7rem; z-index: 2; background: var(--verde); color: var(--blanco); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; padding: 0.22rem 0.5rem; border-radius: 2px; }
+    .video-badge.premium { background: #D4870A; left: auto; right: 0.7rem; }
+    .video-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-55%); z-index: 2; width: 44px; height: 44px; border: 1.5px solid rgba(255,255,255,0.5); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+    .rutina-card:hover .video-play { background: var(--verde); border-color: var(--verde); }
+    .video-play svg { margin-left: 3px; }
+    .video-coming { position: absolute; bottom: 0.7rem; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.35); white-space: nowrap; }
+    .video-duration { position: absolute; bottom: 0.7rem; right: 0.7rem; z-index: 2; background: rgba(0,0,0,0.55); color: var(--blanco); font-size: 0.62rem; font-weight: 600; padding: 0.18rem 0.45rem; border-radius: 2px; }
+    .video-emoji { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 2.5rem; z-index: 1; opacity: 0.18; }
+    .card-body { padding: 0.9rem 1rem 1rem; }
+    .card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.4rem; }
+    .card-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 0.04em; line-height: 1.1; flex: 1; padding-right: 0.5rem; }
+    .card-level { flex-shrink: 0; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.2rem 0.45rem; border-radius: 2px; margin-top: 2px; }
+    .card-level.beg { background: rgba(20,138,62,0.12); color: var(--verde); }
+    .card-level.int { background: rgba(212,135,10,0.12); color: #D4870A; }
+    .card-desc { font-size: 0.75rem; color: var(--gris-text); line-height: 1.55; margin-bottom: 0.75rem; }
+    .card-meta { display: flex; gap: 1rem; padding-top: 0.65rem; border-top: 1px solid var(--gris); }
+    .card-meta span { font-size: 0.68rem; color: var(--gris-text); }
+    .card-cta { margin-top: 0.8rem; display: flex; align-items: center; justify-content: space-between; }
+    .card-muscles { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .muscle-tag { font-size: 0.6rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--verde); background: var(--verde-light); padding: 0.18rem 0.4rem; border-radius: 2px; }
+    .btn-iniciar { background: var(--verde); color: var(--blanco); border: none; border-radius: 2px; padding: 0.5rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+    .btn-iniciar:hover { background: var(--verde-dim); }
+
+    /* PERFIL SCREEN */
+    #screen-perfil { background: var(--blanco); }
+    .perfil-header { background: var(--negro); padding: 0 1.5rem 1.5rem; position: relative; overflow: hidden; }
+    .perfil-header::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(-55deg, transparent, transparent 40px, rgba(20,138,62,0.06) 40px, rgba(20,138,62,0.06) 41px); }
+    .perfil-inner { position: relative; z-index: 1; display: flex; align-items: center; gap: 1rem; }
+    .perfil-avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--verde-light); border: 2px solid var(--verde); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; flex-shrink: 0; }
+    .perfil-info { flex: 1; }
+    .perfil-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.04em; color: var(--blanco); line-height: 1; }
+    .perfil-email { font-size: 0.72rem; color: rgba(255,255,255,0.4); margin-top: 0.15rem; }
+    .perfil-plan { display: inline-flex; align-items: center; gap: 0.3rem; background: var(--oro-light); border: 1px solid rgba(212,135,10,0.3); border-radius: 2px; padding: 0.22rem 0.5rem; margin-top: 0.4rem; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--oro); }
+    .subs-card { margin: 1.2rem 1.5rem 0; background: var(--negro); border-radius: 8px; padding: 1.3rem; position: relative; overflow: hidden; border: 1px solid rgba(212,135,10,0.2); }
+    .subs-card::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(-55deg, transparent, transparent 35px, rgba(20,138,62,0.05) 35px, rgba(20,138,62,0.05) 36px); }
+    .subs-inner { position: relative; z-index: 1; }
+    .subs-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.8rem; }
+    .subs-label { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--oro); margin-bottom: 0.2rem; }
+    .subs-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.04em; color: var(--blanco); line-height: 1; }
+    .subs-price .amount { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 0.04em; color: var(--verde); line-height: 1; }
+    .subs-price .per { font-size: 0.62rem; color: rgba(255,255,255,0.35); display: block; }
+    .subs-features { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; }
+    .subs-feat { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; color: rgba(255,255,255,0.65); }
+    .subs-feat::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--verde); flex-shrink: 0; }
+    .subs-feat strong { color: rgba(255,255,255,0.9); font-weight: 500; }
+    .btn-subs { width: 100%; background: var(--verde); color: var(--blanco); border: none; border-radius: 4px; padding: 0.85rem; font-family: 'DM Sans', sans-serif; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; transition: background 0.2s; }
+    .btn-subs:hover { background: var(--verde-dim); }
+    .subs-note { text-align: center; font-size: 0.6rem; color: rgba(255,255,255,0.25); margin-top: 0.5rem; }
+    .ajustes-list { padding: 0 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+    .ajuste-row { display: flex; align-items: center; gap: 0.85rem; padding: 0.85rem 1rem; background: var(--gris); border-radius: 4px; cursor: pointer; border: 1px solid transparent; transition: border-color 0.2s, background 0.2s; }
+    .ajuste-row:hover { border-color: rgba(20,138,62,0.2); background: var(--verde-pale); }
+    .ajuste-icon { width: 36px; height: 36px; background: var(--negro); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+    .ajuste-info { flex: 1; }
+    .ajuste-name { font-size: 0.82rem; font-weight: 500; }
+    .ajuste-desc { font-size: 0.65rem; color: var(--gris-text); margin-top: 0.05rem; }
+    .toggle { width: 36px; height: 20px; background: var(--verde); border-radius: 10px; position: relative; cursor: pointer; transition: background 0.2s; }
+    .toggle.off { background: var(--gris-mid); }
+    .toggle::after { content: ''; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: var(--blanco); border-radius: 50%; transition: right 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .toggle.off::after { right: 18px; }
+    .logout-btn { margin: 0.8rem 1.5rem 0; width: calc(100% - 3rem); background: transparent; border: 1px solid rgba(200,50,50,0.2); border-radius: 4px; padding: 0.8rem; font-family: 'DM Sans', sans-serif; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #C33; cursor: pointer; transition: background 0.2s; }
+    .logout-btn:hover { background: rgba(200,50,50,0.05); }
+
+    /* BOTTOM NAV */
+    .bottom-nav { height: 80px; background: var(--blanco); border-top: 1px solid rgba(20,138,62,0.1); display: flex; align-items: flex-start; padding-top: 0.8rem; flex-shrink: 0; z-index: 50; }
+    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.22rem; cursor: pointer; position: relative; transition: transform 0.15s; }
+    .nav-item:active { transform: scale(0.92); }
+    .nav-label { font-size: 0.6rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gris-text); }
+    .nav-item.active .nav-label { color: var(--verde); }
+    .nav-dot { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--verde); opacity: 0; }
+    .nav-item.active .nav-dot { opacity: 1; }
+    .nav-fab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; cursor: pointer; }
+    .fab-btn { width: 48px; height: 48px; background: var(--verde); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: -20px; box-shadow: 0 4px 16px rgba(20,138,62,0.4); transition: transform 0.2s; }
+    .nav-fab:active .fab-btn { transform: scale(0.93); }
+    .fab-label { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--verde); margin-top: 2px; }
+
+    @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    @media (max-width: 430px) {
+      body { background: var(--negro); }
+      .phone-shell { margin:0; border-radius:0; box-shadow:none; height:100dvh; max-width:100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="phone-shell">
+
+  <!-- STATUS BAR -->
+  <div class="status-bar dark" id="statusBar">
+    <span class="time">9:41</span>
+    <div class="status-icons">
+      <svg width="16" height="12" viewBox="0 0 16 12"><rect x="0" y="3" width="3" height="9" rx="1" fill="white"/><rect x="4.5" y="2" width="3" height="10" rx="1" fill="white"/><rect x="9" y="0.5" width="3" height="11.5" rx="1" fill="white"/><rect x="13.5" y="0" width="2.5" height="12" rx="1" fill="rgba(255,255,255,0.3)"/></svg>
+      <svg width="16" height="12" viewBox="0 0 20 14"><path d="M10 3C12.8 3 15.3 4.2 17 6.2L18.5 4.5C16.4 2.1 13.4 0.5 10 0.5C6.6 0.5 3.6 2.1 1.5 4.5L3 6.2C4.7 4.2 7.2 3 10 3Z" fill="white"/><path d="M10 6C11.9 6 13.6 6.9 14.8 8.3L16.3 6.6C14.7 4.9 12.5 3.8 10 3.8C7.5 3.8 5.3 4.9 3.7 6.6L5.2 8.3C6.4 6.9 8.1 6 10 6Z" fill="white"/><circle cx="10" cy="11" r="2" fill="white"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="white" stroke-opacity="0.35"/><rect x="2" y="2" width="16" height="8" rx="2" fill="white"/><path d="M23 4.5V7.5C23.8 7.2 24.5 6.5 24.5 6C24.5 5.5 23.8 4.8 23 4.5Z" fill="white" fill-opacity="0.4"/></svg>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="globalLoading">
+    <div class="loading-logo">LIBERATE<br/><span>FUNCIONAL</span></div>
+    <div class="spinner"></div>
+  </div>
+
+  <!-- SCREENS -->
+  <div class="screens-wrap" id="screensWrap" style="display:none">
+
+    <!-- ── AUTH ── -->
+    <div class="screen active no-nav" id="screen-auth">
+      <div class="auth-screen">
+        <div class="auth-brand">
+          <div class="auth-logo">LIBERATE<br/><span>FUNCIONAL</span></div>
+          <div class="auth-tagline">Tu entrenamiento, en cualquier lugar</div>
+        </div>
+        <div class="auth-card">
+          <div class="auth-tabs">
+            <div class="auth-tab active" id="tab-login" onclick="switchTab('login')">Ingresar</div>
+            <div class="auth-tab" id="tab-registro" onclick="switchTab('registro')">Registrarse</div>
+          </div>
+
+          <!-- FORM LOGIN -->
+          <div class="auth-form" id="form-login">
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input class="form-input" id="login-email" type="email" placeholder="tu@email.com" autocomplete="email"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Contraseña</label>
+              <input class="form-input" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+            </div>
+            <div class="form-error" id="login-error"></div>
+            <button class="btn-auth" id="btn-login" onclick="doLogin()">
+              Ingresar
+            </button>
+            <div class="auth-note">¿No tenés cuenta? <a onclick="switchTab('registro')">Registrate gratis</a></div>
+          </div>
+
+          <!-- FORM REGISTRO -->
+          <div class="auth-form hidden" id="form-registro">
+            <div class="form-group">
+              <label class="form-label">Nombre</label>
+              <input class="form-input" id="reg-nombre" type="text" placeholder="Tu nombre"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input class="form-input" id="reg-email" type="email" placeholder="tu@email.com" autocomplete="email"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Contraseña</label>
+              <input class="form-input" id="reg-pass" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password"/>
+            </div>
+            <div class="form-error" id="reg-error"></div>
+            <button class="btn-auth" id="btn-registro" onclick="doRegistro()">
+              Crear cuenta gratis
+            </button>
+            <div class="auth-divider">y después</div>
+            <div class="auth-note" style="background:var(--verde-pale);padding:0.7rem;border-radius:4px;color:var(--verde-dim)">
+              Activá tu plan Premium por <strong>$4.990/mes</strong> para acceder a todas las rutinas y videos
+            </div>
+            <div class="auth-note">¿Ya tenés cuenta? <a onclick="switchTab('login')">Ingresá acá</a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BIENVENIDA POST-PAGO ── -->
+    <div class="screen no-nav" id="screen-bienvenida">
+      <div id="screen-bienvenida" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;text-align:center;padding:2rem;background:var(--negro);position:relative;overflow:hidden;">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-55deg,transparent,transparent 40px,rgba(20,138,62,0.06) 40px,rgba(20,138,62,0.06) 41px);"></div>
+        <div style="position:relative;z-index:1;">
+          <div style="font-size:4rem;margin-bottom:1rem;animation:bounceIn 0.6s ease">🎉</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:0.04em;color:var(--blanco);line-height:1;margin-bottom:0.5rem">¡BIENVENIDO A<br/><span style="color:var(--verde)">LIBERATE!</span></div>
+          <div style="font-size:0.82rem;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:2rem;max-width:280px">Tu suscripción Premium está activa. Ahora tenés acceso completo a todo el contenido.</div>
+          <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:2rem;text-align:left">
+            <div style="display:flex;align-items:center;gap:0.7rem;font-size:0.78rem;color:rgba(255,255,255,0.7)"><span style="color:var(--verde);font-weight:700">✓</span> Todas las rutinas desbloqueadas</div>
+            <div style="display:flex;align-items:center;gap:0.7rem;font-size:0.78rem;color:rgba(255,255,255,0.7)"><span style="color:var(--verde);font-weight:700">✓</span> Videos HD de cada ejercicio</div>
+            <div style="display:flex;align-items:center;gap:0.7rem;font-size:0.78rem;color:rgba(255,255,255,0.7)"><span style="color:var(--verde);font-weight:700">✓</span> Seguimiento de progreso avanzado</div>
+            <div style="display:flex;align-items:center;gap:0.7rem;font-size:0.78rem;color:rgba(255,255,255,0.7)"><span style="color:var(--verde);font-weight:700">✓</span> Nuevas rutinas cada semana</div>
+          </div>
+          <button class="btn-entrar" onclick="navTo('inicio')">Empezar a entrenar →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── INICIO ── -->
+    <div class="screen" id="screen-inicio">
+      <div class="app-header">
+        <div class="app-header-row">
+          <div>
+            <div class="greeting-label">Buenos días</div>
+            <div class="greeting-name">HOLA, <span class="accent" id="userNombre">CAMPEÓN</span></div>
+          </div>
+          <div class="avatar" onclick="navTo('perfil')">💪</div>
+        </div>
+      </div>
+      <div class="streak-strip">
+        <div class="streak-fire">🔥</div>
+        <div class="streak-text"><strong>5 DÍAS</strong><p>Racha activa · seguí así</p></div>
+        <div class="streak-days">
+          <div class="day-dot active"></div><div class="day-dot active"></div><div class="day-dot active"></div>
+          <div class="day-dot active"></div><div class="day-dot today"></div><div class="day-dot"></div><div class="day-dot"></div>
+        </div>
+      </div>
+      <div class="sec-label"><h2>Rutina del día</h2><a onclick="navTo('rutinas')">Ver todo</a></div>
+      <div class="today-card" onclick="navTo('rutinas')">
+        <div class="today-badge">HOY</div>
+        <div class="today-play"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div>
+        <div class="today-info">
+          <div class="today-tag">💪 Pesas Libres · Intermedio</div>
+          <div class="today-title">TREN SUPERIOR COMPLETO</div>
+          <div class="today-meta"><span>⏱ 45 min</span><span>🔥 6 ejercicios</span></div>
+        </div>
+      </div>
+      <div class="sec-label" style="padding-top:1.2rem;"><h2>Rutinas populares</h2><a onclick="navTo('rutinas')">Ver más</a></div>
+      <div class="rutinas-list">
+        <div class="rutina-row" onclick="navTo('rutinas')">
+          <div class="rutina-thumb">🏠</div>
+          <div class="rutina-info"><div class="rutina-name">FULL BODY SIN EQUIPAMIENTO</div><div class="rutina-meta"><span>⏱ 30 min</span><span>🔥 8 ejs</span><span class="rutina-level beg">Principiante</span></div></div>
+          <div class="rutina-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.58L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></div>
+        </div>
+        <div class="rutina-row" onclick="navTo('rutinas')">
+          <div class="rutina-thumb">🧘</div>
+          <div class="rutina-info"><div class="rutina-name">YOGA FLUJO MATUTINO</div><div class="rutina-meta"><span>⏱ 20 min</span><span>🔥 5 ejs</span><span class="rutina-level beg">Principiante</span></div></div>
+          <div class="rutina-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.58L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></div>
+        </div>
+      </div>
+      <div class="progress-card" style="margin-top:1.5rem;">
+        <div class="progress-header"><div><div class="progress-label">Esta semana</div><div class="progress-num">3h 45 <span>min</span></div><div class="progress-sub">↑ 20% más que la semana pasada</div></div></div>
+        <div class="week-bars">
+          <div class="week-bar-col"><div class="bar done" style="height:70%"></div><div class="week-day">L</div></div>
+          <div class="week-bar-col"><div class="bar done" style="height:50%"></div><div class="week-day">M</div></div>
+          <div class="week-bar-col"><div class="bar rest" style="height:15%"></div><div class="week-day">X</div></div>
+          <div class="week-bar-col"><div class="bar done" style="height:85%"></div><div class="week-day">J</div></div>
+          <div class="week-bar-col"><div class="bar today" style="height:60%"></div><div class="week-day today">V</div></div>
+          <div class="week-bar-col"><div class="bar" style="height:8%"></div><div class="week-day">S</div></div>
+          <div class="week-bar-col"><div class="bar" style="height:8%"></div><div class="week-day">D</div></div>
+        </div>
+      </div>
+      <div style="height:1.5rem"></div>
+    </div>
+
+    <!-- ── RUTINAS ── -->
+    <div class="screen" id="screen-rutinas">
+      <div class="page-header"><div class="page-title">TODAS LAS <span class="accent">RUTINAS</span></div><div class="page-sub">Seleccioná una rutina para comenzar</div></div>
+      <div class="search-bar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#777" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="Buscar rutina..."/></div>
+      <div class="filter-scroll">
+        <div class="filter-chip active"><span>⚡</span><span class="chip-label">Todas</span></div>
+        <div class="filter-chip"><span>🏠</span><span class="chip-label">Casa</span></div>
+        <div class="filter-chip"><span>🏋️</span><span class="chip-label">Gym</span></div>
+        <div class="filter-chip"><span>🔩</span><span class="chip-label">Pesas</span></div>
+        <div class="filter-chip"><span>🧘</span><span class="chip-label">Yoga</span></div>
+      </div>
+      <div class="sec-row"><h2>Rutinas disponibles</h2></div>
+      <div class="rutinas-grid">
+        <div class="rutina-card">
+          <div class="video-slot"><div class="video-emoji">🏠</div><div class="video-badge">Casa</div><div class="video-play"><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div><div class="video-duration">30 min</div><div class="video-coming">▶ Video próximamente</div></div>
+          <div class="card-body"><div class="card-top"><div class="card-title">FULL BODY SIN EQUIPAMIENTO</div><div class="card-level beg">Principiante</div></div><div class="card-desc">Rutina completa para trabajar todo el cuerpo desde casa. Sin elementos.</div><div class="card-meta"><span>⏱ 30 min</span><span>🔥 8 ejercicios</span><span>📋 3 series</span></div><div class="card-cta"><div class="card-muscles"><span class="muscle-tag">Pecho</span><span class="muscle-tag">Core</span></div><button class="btn-iniciar">Iniciar ▶</button></div></div>
+        </div>
+        <div class="rutina-card">
+          <div class="video-slot"><div class="video-emoji">🧘</div><div class="video-badge">Yoga</div><div class="video-play"><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div><div class="video-duration">20 min</div><div class="video-coming">▶ Video próximamente</div></div>
+          <div class="card-body"><div class="card-top"><div class="card-title">YOGA FLUJO MATUTINO</div><div class="card-level beg">Principiante</div></div><div class="card-desc">Movilidad y respiración para arrancar el día con energía.</div><div class="card-meta"><span>⏱ 20 min</span><span>🔥 5 posturas</span><span>📋 1 bloque</span></div><div class="card-cta"><div class="card-muscles"><span class="muscle-tag">Movilidad</span></div><button class="btn-iniciar">Iniciar ▶</button></div></div>
+        </div>
+        <div class="rutina-card">
+          <div class="video-slot"><div class="video-emoji">🏋️</div><div class="video-badge">Gym</div><div class="video-badge premium">Premium</div><div class="video-play"><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div><div class="video-duration">45 min</div><div class="video-coming">▶ Video próximamente</div></div>
+          <div class="card-body"><div class="card-top"><div class="card-title">TREN SUPERIOR COMPLETO</div><div class="card-level int">Intermedio</div></div><div class="card-desc">Pecho, espalda, hombros y brazos con máquinas.</div><div class="card-meta"><span>⏱ 45 min</span><span>🔥 6 ejercicios</span><span>📋 4 series</span></div><div class="card-cta"><div class="card-muscles"><span class="muscle-tag">Pecho</span><span class="muscle-tag">Espalda</span></div><button class="btn-iniciar">Iniciar ▶</button></div></div>
+        </div>
+        <div class="rutina-card">
+          <div class="video-slot"><div class="video-emoji">🔩</div><div class="video-badge">Pesas</div><div class="video-badge premium">Premium</div><div class="video-play"><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div><div class="video-duration">55 min</div><div class="video-coming">▶ Video próximamente</div></div>
+          <div class="card-body"><div class="card-top"><div class="card-title">PIERNAS Y GLÚTEOS</div><div class="card-level int">Intermedio</div></div><div class="card-desc">Sentadillas, peso muerto rumano, hip thrust y lunges.</div><div class="card-meta"><span>⏱ 55 min</span><span>🔥 10 ejercicios</span><span>📋 4 series</span></div><div class="card-cta"><div class="card-muscles"><span class="muscle-tag">Glúteos</span><span class="muscle-tag">Cuádriceps</span></div><button class="btn-iniciar">Iniciar ▶</button></div></div>
+        </div>
+      </div>
+      <div style="height:1rem"></div>
+    </div>
+
+    <!-- ── PERFIL ── -->
+    <div class="screen" id="screen-perfil">
+      <div class="perfil-header">
+        <div class="perfil-inner">
+          <div class="perfil-avatar">💪</div>
+          <div class="perfil-info">
+            <div class="perfil-name" id="perfilNombre">USUARIO</div>
+            <div class="perfil-email" id="perfilEmail">usuario@email.com</div>
+            <div class="perfil-plan">★ Plan Premium</div>
+          </div>
+        </div>
+      </div>
+      <div class="sec-row"><h2>Mi suscripción</h2></div>
+      <div class="subs-card">
+        <div class="subs-inner">
+          <div class="subs-top"><div><div class="subs-label">★ Plan activo</div><div class="subs-title">PREMIUM MENSUAL</div></div><div class="subs-price"><div class="amount">$4.990</div><span class="per">ARS / mes</span></div></div>
+          <div class="subs-features">
+            <div class="subs-feat"><strong>Acceso completo</strong> a todas las rutinas</div>
+            <div class="subs-feat"><strong>Videos HD</strong> de cada ejercicio</div>
+            <div class="subs-feat"><strong>Seguimiento</strong> de progreso avanzado</div>
+          </div>
+          <button class="btn-subs" onclick="window.open('https://mpago.com/TU_LINK_AQUI','_blank')">Gestionar suscripción</button>
+          <div class="subs-note">Vía Mercado Pago · Cancela cuando quieras</div>
+        </div>
+      </div>
+      <div class="sec-row" style="padding-top:1.3rem;"><h2>Ajustes</h2></div>
+      <div class="ajustes-list">
+        <div class="ajuste-row"><div class="ajuste-icon">🔔</div><div class="ajuste-info"><div class="ajuste-name">Notificaciones</div><div class="ajuste-desc">Recordatorio diario</div></div><div class="toggle" onclick="this.classList.toggle('off')"></div></div>
+        <div class="ajuste-row"><div class="ajuste-icon">🎵</div><div class="ajuste-info"><div class="ajuste-name">Sonido en timers</div><div class="ajuste-desc">Beep al terminar el descanso</div></div><div class="toggle" onclick="this.classList.toggle('off')"></div></div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">Cerrar sesión</button>
+      <div style="height:1rem"></div>
+    </div>
+
+  </div><!-- /screens-wrap -->
+
+  <!-- BOTTOM NAV (oculto en auth) -->
+  <div class="bottom-nav" id="bottomNav" style="display:none">
+    <div class="nav-item active" id="nav-inicio" onclick="navTo('inicio')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      <div class="nav-label">Inicio</div><div class="nav-dot"></div>
+    </div>
+    <div class="nav-item" id="nav-rutinas" onclick="navTo('rutinas')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+      <div class="nav-label">Rutinas</div><div class="nav-dot"></div>
+    </div>
+    <div class="nav-fab" onclick="navTo('rutinas')">
+      <div class="fab-btn"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div>
+      <div class="fab-label">Entrenar</div>
+    </div>
+    <div class="nav-item" id="nav-progreso" onclick="showToast('Progreso próximamente 📊')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+      <div class="nav-label">Progreso</div><div class="nav-dot"></div>
+    </div>
+    <div class="nav-item" id="nav-perfil" onclick="navTo('perfil')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+      <div class="nav-label">Perfil</div><div class="nav-dot"></div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast"></div>
+
+</div><!-- /phone-shell -->
+
+<script>
+  // ── SUPABASE INIT ──
+  const SUPABASE_URL  = 'https://rlnvweozglxkxtcdaawf.supabase.co';
+  const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsbnZ3ZW96Z2x4a3h0Y2RhYXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NjM5MTMsImV4cCI6MjA5NjEzOTkxM30.f-Z1UpoWVlF46QaLs7Uy13NvdzJHwvKhPmwVqhcV1nU';
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ── INIT: verificar si hay sesión activa ──
+  async function init() {
+    const { data: { session } } = await sb.auth.getSession();
+    document.getElementById('globalLoading').style.display = 'none';
+    document.getElementById('screensWrap').style.display = 'block';
+
+    if (session) {
+      // ya logueado → mostrar app
+      loadUser(session.user);
+      showApp();
+    } else {
+      // no logueado → mostrar auth
+      showAuth();
+    }
+  }
+
+  function showAuth() {
+    document.getElementById('screensWrap').style.display = 'block';
+    document.getElementById('bottomNav').style.display = 'none';
+    setStatusBar('dark');
+    activarScreen('auth');
+  }
+
+  function showApp() {
+    document.getElementById('bottomNav').style.display = 'flex';
+    navTo('inicio');
+  }
+
+  function loadUser(user) {
+    const nombre = user.user_metadata?.nombre || user.email.split('@')[0];
+    const nombreUpper = nombre.toUpperCase();
+    document.getElementById('userNombre').textContent = nombreUpper;
+    document.getElementById('perfilNombre').textContent = nombreUpper;
+    document.getElementById('perfilEmail').textContent = user.email;
+  }
+
+  // ── TABS AUTH ──
+  function switchTab(tab) {
+    document.getElementById('form-login').classList.toggle('hidden', tab !== 'login');
+    document.getElementById('form-registro').classList.toggle('hidden', tab !== 'registro');
+    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+    document.getElementById('tab-registro').classList.toggle('active', tab === 'registro');
+    clearErrors();
+  }
+
+  function clearErrors() {
+    ['login-error','reg-error'].forEach(id => {
+      const el = document.getElementById(id);
+      el.textContent = ''; el.classList.remove('show');
+    });
+  }
+
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg; el.classList.add('show');
+  }
+
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = loading;
+    btn.textContent = loading ? 'Cargando...' : (btnId === 'btn-login' ? 'Ingresar' : 'Crear cuenta gratis');
+  }
+
+  // ── LOGIN ──
+  async function doLogin() {
+    clearErrors();
+    const email = document.getElementById('login-email').value.trim();
+    const pass  = document.getElementById('login-pass').value;
+    if (!email || !pass) { showError('login-error', 'Completá todos los campos'); return; }
+
+    setLoading('btn-login', true);
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+    setLoading('btn-login', false);
+
+    if (error) {
+      showError('login-error', 'Email o contraseña incorrectos');
+      return;
+    }
+    loadUser(data.user);
+    showApp();
+    showToast('¡Bienvenido de vuelta! 💪');
+  }
+
+  // ── REGISTRO ──
+  async function doRegistro() {
+    clearErrors();
+    const nombre = document.getElementById('reg-nombre').value.trim();
+    const email  = document.getElementById('reg-email').value.trim();
+    const pass   = document.getElementById('reg-pass').value;
+
+    if (!nombre || !email || !pass) { showError('reg-error', 'Completá todos los campos'); return; }
+    if (pass.length < 6) { showError('reg-error', 'La contraseña debe tener al menos 6 caracteres'); return; }
+
+    setLoading('btn-registro', true);
+    const { data, error } = await sb.auth.signUp({
+      email, password: pass,
+      options: { data: { nombre } }
+    });
+    setLoading('btn-registro', false);
+
+    if (error) {
+      showError('reg-error', 'No se pudo crear la cuenta. Probá con otro email.');
+      return;
+    }
+
+    // Registro exitoso → mostrar bienvenida
+    loadUser(data.user);
+    setStatusBar('dark');
+    activarScreen('bienvenida');
+    document.getElementById('bottomNav').style.display = 'none';
+  }
+
+  // ── LOGOUT ──
+  async function doLogout() {
+    await sb.auth.signOut();
+    showToast('Sesión cerrada');
+    setTimeout(() => showAuth(), 800);
+  }
+
+  // ── NAVEGACIÓN ──
+  const darkScreens = ['perfil'];
+
+  function navTo(name) {
+    activarScreen(name);
+    document.getElementById('bottomNav').style.display = 'flex';
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const navEl = document.getElementById('nav-' + name);
+    if (navEl) navEl.classList.add('active');
+    setStatusBar(darkScreens.includes(name) ? 'dark' : 'light');
+  }
+
+  function activarScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const s = document.getElementById('screen-' + name);
+    if (s) { s.classList.add('active'); s.scrollTop = 0; }
+  }
+
+  function setStatusBar(theme) {
+    const sb2 = document.getElementById('statusBar');
+    sb2.className = 'status-bar ' + theme;
+    // actualizar color de íconos
+    const fill = theme === 'dark' ? 'white' : '#0D0D0D';
+    sb2.querySelectorAll('svg [fill]:not([fill="none"])').forEach(el => {
+      if (el.getAttribute('fill') !== 'none') el.setAttribute('fill', fill);
+    });
+  }
+
+  // ── FILTROS RUTINAS ──
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
+
+  // ── TOAST ──
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show' + (isError ? ' error' : '');
+    setTimeout(() => t.className = '', 3000);
+  }
+
+  // ── ARRANCAR ──
+  init();
+</script>
+</body>
+</html>
